@@ -1,11 +1,9 @@
--- Campus Notification System — PostgreSQL Schema
--- AffordMed Campus Hiring Evaluation
+-- PostgreSQL Schema for Notification Platform
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TYPE notification_type AS ENUM ('placement', 'result', 'event');
 
--- Notifications table
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     notification_type notification_type NOT NULL,
@@ -19,7 +17,6 @@ CREATE TABLE notifications (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Users table
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
@@ -29,7 +26,6 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- User-Notification junction (read/unread tracking)
 CREATE TABLE user_notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -40,27 +36,14 @@ CREATE TABLE user_notifications (
     UNIQUE (user_id, notification_id)
 );
 
--- =============================================
--- INDEXES
--- =============================================
-
--- filter by type
+-- Indexes for performance tuning
 CREATE INDEX idx_notifications_type ON notifications(notification_type);
-
--- sort by priority (descending)
 CREATE INDEX idx_notifications_priority ON notifications(priority_score DESC);
-
--- combined filter + sort
-CREATE INDEX idx_notifications_type_priority
-    ON notifications(notification_type, priority_score DESC, created_at DESC);
-
--- newest-first listing
+CREATE INDEX idx_notifications_type_priority ON notifications(notification_type, priority_score DESC, created_at DESC);
 CREATE INDEX idx_notifications_created ON notifications(created_at DESC);
 
--- fast unread count per user
-CREATE INDEX idx_user_notif_unread
-    ON user_notifications(user_id, is_read)
-    WHERE is_read = FALSE;
+-- Partial index for tracking unread state
+CREATE INDEX idx_user_notif_unread ON user_notifications(user_id, is_read) WHERE is_read = FALSE;
 
--- search inside metadata
+-- GIN index for custom JSON metadata searches
 CREATE INDEX idx_notifications_metadata ON notifications USING GIN(metadata);
