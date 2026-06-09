@@ -23,7 +23,6 @@ import NotificationsPage from "./pages/NotificationsPage";
 import PriorityPage from "./pages/PriorityPage";
 import { getStats } from "./services/api";
 
-// dark theme
 const theme = createTheme({
   palette: {
     mode: "dark",
@@ -50,12 +49,11 @@ const theme = createTheme({
   },
 });
 
-// helper to count unread notifications
 function getUnreadCount(total) {
   try {
-    const readIds = JSON.parse(localStorage.getItem("readNotifications") || "[]");
-    return Math.max(0, total - readIds.length);
-  } catch {
+    const list = JSON.parse(localStorage.getItem("readNotifications") || "[]");
+    return Math.max(0, total - list.length);
+  } catch (e) {
     return total;
   }
 }
@@ -63,34 +61,34 @@ function getUnreadCount(total) {
 function App() {
   const [tab, setTab] = useState(0);
   const [stats, setStats] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unread, setUnread] = useState(0);
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  // refresh unread count
   const refreshUnread = useCallback(() => {
-    if (stats) setUnreadCount(getUnreadCount(stats.total));
+    if (stats) {
+      setUnread(getUnreadCount(stats.total));
+    }
   }, [stats]);
 
   useEffect(() => {
     getStats()
       .then((res) => {
         setStats(res.data);
-        setUnreadCount(getUnreadCount(res.data.total));
+        setUnread(getUnreadCount(res.data.total));
       })
       .catch(() => {});
   }, []);
 
-  // listen for localStorage changes (when user marks notifications as read)
+  // Poll for read status changes from NotificationsPage
   useEffect(() => {
-    const interval = setInterval(refreshUnread, 2000);
-    return () => clearInterval(interval);
+    const timer = setInterval(refreshUnread, 1500);
+    return () => clearInterval(timer);
   }, [refreshUnread]);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
 
-      {/* Top Navbar */}
       <AppBar
         position="sticky"
         sx={{
@@ -115,14 +113,13 @@ function App() {
             </Box>
           )}
 
-          {/* 🔔 Unread notification badge */}
-          <Tooltip title={`${unreadCount} unread notifications`}>
+          <Tooltip title={`${unread} unread notifications`}>
             <IconButton
-              sx={{ color: unreadCount > 0 ? "#7c4dff" : "rgba(255,255,255,0.4)" }}
-              onClick={() => { setTab(0); }}
+              sx={{ color: unread > 0 ? "#7c4dff" : "rgba(255,255,255,0.4)" }}
+              onClick={() => setTab(0)}
             >
               <Badge
-                badgeContent={unreadCount}
+                badgeContent={unread}
                 color="secondary"
                 max={99}
                 sx={{
@@ -132,7 +129,7 @@ function App() {
                   },
                 }}
               >
-                {unreadCount > 0 ? <NotificationsActiveIcon /> : <NotificationsIcon />}
+                {unread > 0 ? <NotificationsActiveIcon /> : <NotificationsIcon />}
               </Badge>
             </IconButton>
           </Tooltip>
@@ -140,7 +137,7 @@ function App() {
 
         <Tabs
           value={tab}
-          onChange={(_, v) => setTab(v)}
+          onChange={(_, val) => setTab(val)}
           variant={isMobile ? "fullWidth" : "standard"}
           sx={{ px: 2 }}
           slotProps={{
@@ -164,13 +161,11 @@ function App() {
         </Tabs>
       </AppBar>
 
-      {/* Page Content */}
       <Container maxWidth="md" sx={{ py: 3 }}>
         {tab === 0 && <NotificationsPage />}
         {tab === 1 && <PriorityPage />}
       </Container>
 
-      {/* Footer */}
       <Box
         component="footer"
         sx={{

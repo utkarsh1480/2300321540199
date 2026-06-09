@@ -1,18 +1,12 @@
 const axios = require("axios");
 const logger = require("../utils/logger");
 
-// Simple in-memory cache
-let cache = null;
-let cacheTime = 0;
-const CACHE_TTL = 60 * 1000; // 1 minute
+let cachedData = null;
+let lastFetched = 0;
+const CACHE_DURATION = 60 * 1000; 
 
-/**
- * Fallback data matching the actual AffordMed API format:
- *   { ID, Type, Message, Timestamp }
- *
- * Type can be "Placement", "Result", or "Event"
- */
-const FALLBACK_DATA = [
+// Initial mock data that mirrors the API response structure
+const FALLBACK_LIST = [
   {
     ID: "d146095a-0d86-4a34-9e69-3900a14576bc",
     Type: "Result",
@@ -135,12 +129,8 @@ const FALLBACK_DATA = [
   },
 ];
 
-/**
- * Normalize API data to a common format used internally.
- * AffordMed API uses: { ID, Type, Message, Timestamp }
- * We normalize to:    { id, type, message, timestamp }
- */
-function normalize(item) {
+// Normalize backend field formats to consistent camelCase
+function parseItem(item) {
   return {
     id: item.ID || item.id,
     type: (item.Type || item.type || item.notification_type || "Event").toLowerCase(),
@@ -149,46 +139,48 @@ function normalize(item) {
   };
 }
 
-/**
- * Fetch notifications from the AffordMed evaluation API.
- * Falls back to sample data if the API is unreachable.
- */
 async function fetchNotifications() {
-  // return cache if still fresh
-  if (cache && Date.now() - cacheTime < CACHE_TTL) {
-    logger.debug("Returning cached notifications");
-    return cache;
+  const now = Date.now();
+  if (cachedData && now - lastFetched < CACHE_DURATION) {
+    logger.debug("hit cache for notifications");
+    return cachedData;
   }
 
-  const apiUrl = process.env.API_URL;
+  const url = process.env.API_URL;
   const token = process.env.AUTH_TOKEN;
 
   try {
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const opts = { headers: { "Content-Type": "application/json" } };
+    if (token) {
+      opts.headers["Authorization"] = `Bearer ${token}`;
+    }
 
-    logger.info("Fetching notifications from API", { url: apiUrl });
-    const res = await axios.get(apiUrl, { headers, timeout: 10000 });
+    logger.info("pulling from endpoint: " + url);
+    const response = await axios.get(url, { ...opts, timeout: 8000 });
 
-    // API returns { notifications: [...] }
-    let raw;
-    if (Array.isArray(res.data)) raw = res.data;
-    else if (Array.isArray(res.data?.notifications)) raw = res.data.notifications;
-    else if (Array.isArray(res.data?.data)) raw = res.data.data;
-    else throw new Error("Unexpected response format");
+    let rawList;
+    if (Array.isArray(response.data)) {
+      rawList = response.data;
+    } else if (Array.isArray(response.data?.notifications)) {
+      rawList = response.data.notifications;
+    } else if (Array.isArray(response.data?.data)) {
+      rawList = response.data.data;
+    } else {
+      throw new Error("Format not supported");
+    }
 
-    const data = raw.map(normalize);
-    logger.info(`Fetched ${data.length} notifications from API`);
+    const cleanList = rawList.map(parseItem);
+    logger.info(`received ${cleanList.length} items from endpoint`);
 
-    cache = data;
-    cacheTime = Date.now();
-    return data;
+    cachedData = cleanList;
+    lastFetched = now;
+    return cleanList;
   } catch (err) {
-    logger.warn(`API unavailable (${err.message}), using fallback data`);
-    const data = FALLBACK_DATA.map(normalize);
-    cache = data;
-    cacheTime = Date.now();
-    return data;
+    logger.warn(`API request failed: ${err.message}. Using backup local list.`);
+    const backupList = FALLBACK_LIST.map(parseItem);
+    cachedData = backupList;
+    lastFetched = now;
+    return backupList;
   }
 }
 

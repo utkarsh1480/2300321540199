@@ -22,32 +22,30 @@ import CircleIcon from "@mui/icons-material/Circle";
 
 import { getNotifications } from "../services/api";
 
-// colors & icons for each type
-const TYPE_CONFIG = {
+const CONFIG = {
   placement: { color: "#ff6e40", icon: <WorkIcon />, label: "Placement" },
   result: { color: "#40c4ff", icon: <SchoolIcon />, label: "Result" },
   event: { color: "#69f0ae", icon: <EventIcon />, label: "Event" },
 };
 
-// read/unread helpers using localStorage
-function getReadIds() {
+function readIdsFromStorage() {
   try {
     return JSON.parse(localStorage.getItem("readNotifications") || "[]");
-  } catch {
+  } catch (e) {
     return [];
   }
 }
 
-function markAsRead(id) {
-  const ids = getReadIds();
+function addToRead(id) {
+  const ids = readIdsFromStorage();
   if (!ids.includes(id)) {
     ids.push(id);
     localStorage.setItem("readNotifications", JSON.stringify(ids));
   }
 }
 
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function getDurationLabel(timestamp) {
+  const diff = Date.now() - new Date(timestamp).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -58,111 +56,71 @@ function timeAgo(dateStr) {
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [err, setErr] = useState(null);
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [readIds, setReadIds] = useState(getReadIds());
+  const [readList, setReadList] = useState(readIdsFromStorage());
 
   const limit = 6;
 
-  // fetch data when filter or page changes
   useEffect(() => {
     setLoading(true);
-    setError(null);
+    setErr(null);
 
     getNotifications(page, limit, filter)
       .then((res) => {
-        setNotifications(res.data.notifications);
+        setItems(res.data.notifications);
         setTotalPages(res.data.pagination.totalPages);
       })
       .catch(() => {
-        setError("Could not load notifications. Is the backend running?");
+        setErr("Could not retrieve notifications from service.");
       })
       .finally(() => setLoading(false));
   }, [page, filter]);
 
-  // reset page when filter changes
-  const handleFilterChange = (_, value) => {
-    if (value !== null) {
-      setFilter(value);
+  const handleFilter = (_, val) => {
+    if (val !== null) {
+      setFilter(val);
       setPage(1);
     }
   };
 
-  const handleMarkRead = (id) => {
-    markAsRead(id);
-    setReadIds([...getReadIds()]);
+  const markRead = (id) => {
+    addToRead(id);
+    setReadList([...readIdsFromStorage()]);
   };
 
   return (
     <Box>
-      {/* Filter bar */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          mb: 3,
-          flexWrap: "wrap",
-        }}
-      >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3, flexWrap: "wrap" }}>
         <FilterListIcon sx={{ color: "rgba(255,255,255,0.5)" }} />
         <ToggleButtonGroup
           value={filter}
           exclusive
-          onChange={handleFilterChange}
+          onChange={handleFilter}
           size="small"
         >
-          <ToggleButton value="all" sx={{ textTransform: "none", px: 2 }}>
-            All
-          </ToggleButton>
-          <ToggleButton
-            value="placement"
-            sx={{ textTransform: "none", px: 2, color: "#ff6e40" }}
-          >
-            Placement
-          </ToggleButton>
-          <ToggleButton
-            value="result"
-            sx={{ textTransform: "none", px: 2, color: "#40c4ff" }}
-          >
-            Result
-          </ToggleButton>
-          <ToggleButton
-            value="event"
-            sx={{ textTransform: "none", px: 2, color: "#69f0ae" }}
-          >
-            Event
-          </ToggleButton>
+          <ToggleButton value="all" sx={{ textTransform: "none", px: 2 }}>All</ToggleButton>
+          <ToggleButton value="placement" sx={{ textTransform: "none", px: 2, color: "#ff6e40" }}>Placement</ToggleButton>
+          <ToggleButton value="result" sx={{ textTransform: "none", px: 2, color: "#40c4ff" }}>Result</ToggleButton>
+          <ToggleButton value="event" sx={{ textTransform: "none", px: 2, color: "#69f0ae" }}>Event</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
-      {/* Error */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
 
-      {/* Loading skeletons */}
       {loading &&
         [1, 2, 3].map((i) => (
-          <Skeleton
-            key={i}
-            variant="rounded"
-            height={120}
-            sx={{ mb: 2, borderRadius: 3 }}
-          />
+          <Skeleton key={i} variant="rounded" height={120} sx={{ mb: 2, borderRadius: 3 }} />
         ))}
 
-      {/* Notification cards */}
       {!loading &&
-        notifications.map((n) => {
-          const isRead = readIds.includes(n.id);
-          const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.event;
+        items.map((n) => {
+          const isRead = readList.includes(n.id);
+          const ui = CONFIG[n.type] || CONFIG.event;
 
           return (
             <Card
@@ -170,7 +128,7 @@ export default function NotificationsPage() {
               sx={{
                 mb: 2,
                 opacity: isRead ? 0.65 : 1,
-                borderLeft: `4px solid ${cfg.color}`,
+                borderLeft: `4px solid ${ui.color}`,
                 transition: "all 0.2s ease",
                 "&:hover": {
                   transform: "translateY(-2px)",
@@ -179,57 +137,38 @@ export default function NotificationsPage() {
               }}
             >
               <CardContent sx={{ pb: "12px !important" }}>
-                {/* Top row: type chip + time + read button */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 1,
-                  }}
-                >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                   <Chip
-                    icon={cfg.icon}
-                    label={cfg.label}
+                    icon={ui.icon}
+                    label={ui.label}
                     size="small"
                     sx={{
-                      bgcolor: `${cfg.color}20`,
-                      color: cfg.color,
+                      bgcolor: `${ui.color}20`,
+                      color: ui.color,
                       fontWeight: 600,
                       fontSize: 12,
                     }}
                   />
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)" }}>
-                      {timeAgo(n.timestamp)}
+                      {getDurationLabel(n.timestamp)}
                     </Typography>
                     {!isRead && (
                       <Tooltip title="Mark as read">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleMarkRead(n.id)}
-                          sx={{ color: "#7c4dff" }}
-                        >
+                        <IconButton size="small" onClick={() => markRead(n.id)} sx={{ color: "#7c4dff" }}>
                           <MarkEmailReadIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     )}
-                    {!isRead && (
-                      <CircleIcon sx={{ fontSize: 8, color: "#7c4dff" }} />
-                    )}
+                    {!isRead && <CircleIcon sx={{ fontSize: 8, color: "#7c4dff" }} />}
                   </Box>
                 </Box>
 
-                {/* Message */}
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5, lineHeight: 1.3 }}>
                   {n.message}
                 </Typography>
 
-                {/* ID */}
-                <Typography
-                  variant="caption"
-                  sx={{ color: "rgba(255,255,255,0.3)", display: "block" }}
-                >
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.3)", display: "block" }}>
                   ID: {n.id}
                 </Typography>
               </CardContent>
@@ -237,12 +176,10 @@ export default function NotificationsPage() {
           );
         })}
 
-      {/* Empty state */}
-      {!loading && notifications.length === 0 && (
-        <Alert severity="info">No notifications found for this filter.</Alert>
+      {!loading && items.length === 0 && (
+        <Alert severity="info">No new notifications in this category.</Alert>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
           <Pagination

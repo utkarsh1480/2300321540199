@@ -17,16 +17,15 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 
 import { getPriorityNotifications } from "../services/api";
 
-const TYPE_CONFIG = {
+const CONFIG = {
   placement: { color: "#ff6e40", icon: <WorkIcon fontSize="small" /> },
   result: { color: "#40c4ff", icon: <SchoolIcon fontSize="small" /> },
   event: { color: "#69f0ae", icon: <EventIcon fontSize="small" /> },
 };
 
-// medal colors for top 3
-const MEDAL = ["#ffd700", "#c0c0c0", "#cd7f32"];
+const MEDAL_COLORS = ["#ffd700", "#c0c0c0", "#cd7f32"];
 
-function timeAgo(dateStr) {
+function formatTimeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const hrs = Math.floor(diff / 3600000);
   if (hrs < 1) return "< 1h ago";
@@ -35,67 +34,56 @@ function timeAgo(dateStr) {
 }
 
 export default function PriorityPage() {
-  const [notifications, setNotifications] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [meta, setMeta] = useState(null);
+  const [err, setErr] = useState(null);
+  const [info, setInfo] = useState(null);
 
   useEffect(() => {
     getPriorityNotifications(10)
       .then((res) => {
-        setNotifications(res.data.notifications);
-        setMeta(res.data);
+        setItems(res.data.notifications);
+        setInfo(res.data);
       })
-      .catch(() => setError("Could not load priority feed. Is the backend running?"))
+      .catch(() => setErr("Failed to load ranked feed."))
       .finally(() => setLoading(false));
   }, []);
 
-  const maxScore = notifications.length > 0 ? notifications[0].score : 1;
+  const maxVal = items.length > 0 ? items[0].score : 1;
 
   return (
     <Box>
-      {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
         <TrendingUpIcon sx={{ color: "#7c4dff" }} />
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          Top 10 Priority Notifications
+          Priority Inbox (Top 10)
         </Typography>
       </Box>
 
-      {meta && (
+      {info && (
         <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", mb: 3, display: "block" }}>
-          Processed {meta.total_processed} notifications • Scored using:{" "}
-          {meta.algorithm?.formula}
+          Processed {info.total_processed} items • Scored using: {info.algorithm?.formula}
         </Typography>
       )}
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
 
       {loading &&
         [1, 2, 3, 4].map((i) => (
-          <Skeleton
-            key={i}
-            variant="rounded"
-            height={100}
-            sx={{ mb: 2, borderRadius: 3 }}
-          />
+          <Skeleton key={i} variant="rounded" height={100} sx={{ mb: 2, borderRadius: 3 }} />
         ))}
 
       {!loading &&
-        notifications.map((n, index) => {
-          const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.event;
-          const barWidth = (n.score / maxScore) * 100;
+        items.map((n, idx) => {
+          const ui = CONFIG[n.type] || CONFIG.event;
+          const pct = (n.score / maxVal) * 100;
 
           return (
             <Card
               key={n.id}
               sx={{
                 mb: 2,
-                borderLeft: `4px solid ${cfg.color}`,
+                borderLeft: `4px solid ${ui.color}`,
                 position: "relative",
                 overflow: "visible",
                 transition: "all 0.2s ease",
@@ -105,14 +93,13 @@ export default function PriorityPage() {
                 },
               }}
             >
-              {/* Rank badge for top 3 */}
-              {index < 3 && (
+              {idx < 3 && (
                 <Box
                   sx={{
                     position: "absolute",
                     top: -10,
                     left: -10,
-                    bgcolor: MEDAL[index],
+                    bgcolor: MEDAL_COLORS[idx],
                     color: "#000",
                     width: 28,
                     height: 28,
@@ -122,41 +109,29 @@ export default function PriorityPage() {
                     justifyContent: "center",
                     fontWeight: 800,
                     fontSize: 13,
-                    boxShadow: `0 2px 8px ${MEDAL[index]}80`,
+                    boxShadow: `0 2px 8px ${MEDAL_COLORS[idx]}80`,
                   }}
                 >
-                  {index + 1}
+                  {idx + 1}
                 </Box>
               )}
 
               <CardContent sx={{ pb: "12px !important" }}>
-                {/* Top row */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 1,
-                  }}
-                >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Chip
-                      icon={cfg.icon}
+                      icon={ui.icon}
                       label={n.type}
                       size="small"
                       sx={{
-                        bgcolor: `${cfg.color}20`,
-                        color: cfg.color,
+                        bgcolor: `${ui.color}20`,
+                        color: ui.color,
                         fontWeight: 600,
                         fontSize: 12,
                         textTransform: "capitalize",
                       }}
                     />
-                    {index < 3 && (
-                      <EmojiEventsIcon
-                        sx={{ fontSize: 18, color: MEDAL[index] }}
-                      />
-                    )}
+                    {idx < 3 && <EmojiEventsIcon sx={{ fontSize: 18, color: MEDAL_COLORS[idx] }} />}
                   </Box>
                   <Chip
                     label={`Score: ${n.score.toFixed(4)}`}
@@ -171,16 +146,14 @@ export default function PriorityPage() {
                   />
                 </Box>
 
-                {/* Message */}
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  #{index + 1} {n.message}
+                  #{idx + 1} {n.message}
                 </Typography>
 
-                {/* Score bar */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <LinearProgress
                     variant="determinate"
-                    value={barWidth}
+                    value={pct}
                     sx={{
                       flex: 1,
                       height: 6,
@@ -188,15 +161,12 @@ export default function PriorityPage() {
                       bgcolor: "rgba(255,255,255,0.05)",
                       "& .MuiLinearProgress-bar": {
                         borderRadius: 3,
-                        background: `linear-gradient(90deg, ${cfg.color}, #7c4dff)`,
+                        background: `linear-gradient(90deg, ${ui.color}, #7c4dff)`,
                       },
                     }}
                   />
-                  <Typography
-                    variant="caption"
-                    sx={{ color: "rgba(255,255,255,0.35)", minWidth: 50 }}
-                  >
-                    {timeAgo(n.timestamp)}
+                  <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.35)", minWidth: 50 }}>
+                    {formatTimeAgo(n.timestamp)}
                   </Typography>
                 </Box>
               </CardContent>
@@ -204,8 +174,7 @@ export default function PriorityPage() {
           );
         })}
 
-      {/* Algorithm explanation card */}
-      {meta && !loading && (
+      {info && !loading && (
         <Card
           sx={{
             mt: 3,
@@ -218,7 +187,7 @@ export default function PriorityPage() {
               🧮 How Priority Scoring Works
             </Typography>
             <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.6)", lineHeight: 1.8 }}>
-              <strong>Formula:</strong> score = (typeWeight × 0.6) + (recency × 0.3) + (engagement × 0.1)
+              <strong>Formula:</strong> score = (typeWeight * 0.6) + (recency * 0.3) + (engagement * 0.1)
               <br />
               <strong>Type Weights:</strong> Placement = 1.0, Result = 0.7, Event = 0.4
               <br />
