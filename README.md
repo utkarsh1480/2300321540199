@@ -14,15 +14,16 @@ A notification dashboard system that pulls notifications from the evaluation API
 
 - `notification_system_design.md`: Design document answering stage questions
 - `schema.sql`: Database schema with indexes
-- `backend/`: Node.js Express server
-- `frontend/`: React + Vite + Material UI app
+- `logging_middleware/`: standalone logger middleware folder
+- `notification_app_be/`: Node.js Express server
+- `notification_app_fe/`: React + Vite + Material UI app
 - `screenshots/`: App preview screenshots
 
 ## How to Run
 
 ### 1. Start the Backend API
 ```bash
-cd backend
+cd notification_app_be
 npm install
 npm run dev
 ```
@@ -30,14 +31,14 @@ The server will run on `http://localhost:3001`
 
 ### 2. Start the Frontend App
 ```bash
-cd frontend
+cd notification_app_fe
 npm install
 npm run dev
 ```
 The frontend will run on `http://localhost:5173`
 
 ### 3. Environment Variables (Optional)
-If you want to configure the API variables, create a `.env` file in `backend/`:
+If you want to configure the API variables, create a `.env` file in `notification_app_be/`:
 ```env
 PORT=3001
 API_URL=http://4.224.186.213/evaluation-service/notifications
